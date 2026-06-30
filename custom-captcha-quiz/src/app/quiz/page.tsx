@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { prisma } from '@/lib/prisma'
+import { GridIcon } from '@/components/icons'
 
 export const dynamic = 'force-dynamic'
 
@@ -12,12 +13,13 @@ export default async function QuizListPage() {
   return (
     <div className="container page">
       <div className="mb-4">
-        <h1 style={{ fontSize: 24, fontWeight: 700, marginBottom: 4 }}>Available Quizzes</h1>
-        <p className="text-muted text-sm">Select a quiz to verify you are human</p>
+        <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 4 }}>利用可能なクイズ</h1>
+        <p className="text-muted text-sm">クイズを選んで人間性の確認を行ってください</p>
       </div>
       {quizzes.length === 0 ? (
         <div className="card" style={{ textAlign: 'center', padding: '60px 24px' }}>
-          <p className="text-muted">No quizzes available yet.</p>
+          <GridIcon size={32} color="var(--text3)" />
+          <p className="text-muted mt-3">利用可能なクイズがありません。</p>
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -27,9 +29,9 @@ export default async function QuizListPage() {
                 <div>
                   <div style={{ fontWeight: 600, marginBottom: 4 }}>{q.title}</div>
                   {q.description && <p className="text-muted text-sm">{q.description}</p>}
-                  <span className="badge badge-accent mt-2">{q._count.questions} questions</span>
+                  <span className="badge badge-accent mt-2">問題数 {q._count.questions}</span>
                 </div>
-                <Link href={`/quiz/${q.id}`} className="btn btn-primary">Start</Link>
+                <Link href={`/quiz/${q.id}`} className="btn btn-primary">開始</Link>
               </div>
             </div>
           ))}

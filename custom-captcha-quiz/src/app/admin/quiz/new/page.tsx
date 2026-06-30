@@ -2,6 +2,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { ArrowLeftIcon } from '@/components/icons'
 
 export default function NewQuizPage() {
   const router = useRouter()
@@ -14,7 +15,7 @@ export default function NewQuizPage() {
   const [loading, setLoading] = useState(false)
 
   async function handleSubmit() {
-    if (!title.trim()) { setError('Title is required'); return }
+    if (!title.trim()) { setError('タイトルは必須です'); return }
     setLoading(true); setError('')
     try {
       const res = await fetch('/api/admin/quiz', {
@@ -22,7 +23,7 @@ export default function NewQuizPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ title, description, maxAttempts, sessionMax, questionsPerSession }),
       })
-      if (!res.ok) { const d = await res.json(); setError(d.error ?? 'Error'); return }
+      if (!res.ok) { const d = await res.json(); setError(d.error ?? 'エラーが発生しました'); return }
       const quiz = await res.json()
       router.push(`/admin/quiz/${quiz.id}`)
     } finally { setLoading(false) }
@@ -31,35 +32,38 @@ export default function NewQuizPage() {
   return (
     <div className="container page">
       <div className="mb-4">
-        <Link href="/admin" className="text-muted text-sm">← Back to Admin</Link>
-        <h1 style={{ fontSize: 22, fontWeight: 700, marginTop: 8 }}>Create New Quiz</h1>
+        <Link href="/admin" className="text-muted text-sm" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+          <ArrowLeftIcon size={14} />
+          管理画面に戻る
+        </Link>
+        <h1 style={{ fontSize: 20, fontWeight: 700, marginTop: 10 }}>新規クイズ作成</h1>
       </div>
       <div className="card" style={{ maxWidth: 560 }}>
         <div className="form-group">
-          <label className="label">Quiz Title *</label>
-          <input value={title} onChange={e => setTitle(e.target.value)} placeholder="e.g. Image Recognition Test" />
+          <label className="label">クイズタイトル *</label>
+          <input value={title} onChange={e => setTitle(e.target.value)} placeholder="例：画像認識テスト" />
         </div>
         <div className="form-group">
-          <label className="label">Description</label>
-          <textarea value={description} onChange={e => setDescription(e.target.value)} rows={2} placeholder="Optional description" style={{ resize: 'vertical' }} />
+          <label className="label">説明</label>
+          <textarea value={description} onChange={e => setDescription(e.target.value)} rows={2} placeholder="任意の説明文" style={{ resize: 'vertical' }} />
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 16 }}>
           <div>
-            <label className="label">Max Attempts/Q</label>
+            <label className="label">問題ごとの試行上限</label>
             <input type="number" min={1} value={maxAttempts} onChange={e => setMaxAttempts(Number(e.target.value))} />
           </div>
           <div>
-            <label className="label">Session Max</label>
+            <label className="label">セッション上限</label>
             <input type="number" min={1} value={sessionMax} onChange={e => setSessionMax(Number(e.target.value))} />
           </div>
           <div>
-            <label className="label">Questions/Session</label>
+            <label className="label">1回の出題数</label>
             <input type="number" min={1} value={questionsPerSession} onChange={e => setQuestionsPerSession(Number(e.target.value))} />
           </div>
         </div>
         {error && <p className="error-msg mb-3">{error}</p>}
         <button className="btn btn-primary" onClick={handleSubmit} disabled={loading}>
-          {loading ? 'Creating...' : 'Create Quiz'}
+          {loading ? '作成中...' : 'クイズを作成'}
         </button>
       </div>
     </div>
