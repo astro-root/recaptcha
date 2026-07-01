@@ -37,11 +37,21 @@ export async function POST(req: NextRequest) {
   })
 
   const selected = shuffle(quiz.questions).slice(0, quiz.questionsPerSession)
-  const questions = selected.map(q => ({
-    id: q.id,
-    text: q.text,
-    choices: shuffle(q.choices).map(c => ({ id: c.id, text: c.text, imageUrl: c.imageUrl })),
-  }))
+  const questions = selected.map(q => {
+    const correctCount = q.choices.filter(c => c.isCorrect).length
+    return {
+      id: q.id,
+      text: q.text,
+      multiSelect: correctCount > 1,
+      correctCount,
+      choices: shuffle(q.choices).map(c => ({ id: c.id, text: c.text, imageUrl: c.imageUrl })),
+    }
+  })
 
-  return NextResponse.json({ sessionId, token, signature, quizTitle: quiz.title, maxAttempts: quiz.maxAttempts, questions }, { status: 201 })
+  return NextResponse.json({
+    sessionId, token, signature,
+    quizTitle: quiz.title,
+    maxAttempts: quiz.maxAttempts,
+    questions,
+  }, { status: 201 })
 }

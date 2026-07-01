@@ -5,7 +5,7 @@ import { verifySessionToken } from '@/lib/hmac'
 export async function POST(req: NextRequest, { params }: { params: Promise<{ sessionId: string }> }) {
   const { sessionId } = await params
   const body = await req.json()
-  const { token, signature, questionId, choiceId, timeTaken } = body
+  const { token, signature, questionId, choiceIds, timeTaken } = body
 
   if (!token || !signature) return NextResponse.json({ error: 'Missing auth' }, { status: 401 })
   if (!verifySessionToken(token, signature)) return NextResponse.json({ error: 'Invalid signature' }, { status: 403 })
@@ -23,14 +23,22 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ ses
     return NextResponse.json({ error: 'Attempt limit reached', isCorrect: false, limitReached: true, attempt: attemptCount, maxAttempts: quiz.maxAttempts }, { status: 429 })
   }
 
-  const choice = await prisma.choice.findUnique({ where: { id: choiceId } })
-  if (!choice || choice.questionId !== questionId) return NextResponse.json({ error: 'Invalid choice' }, { status: 400 })
+  const allChoices = await prisma.choice.findMany({ where: { questionId } })
+  const correctIds = new Set(allChoices.filter(c => c.isCorrect).map(c => c.id))
+  const selectedIds = new Set<string>(Array.isArray(choiceIds) ? choiceIds : [choiceIds])
 
-  const isCorrect = choice.isCorrect
+  const isCorrect = correctIds.size === selectedIds.size &&
+    [...correctIds].every(id => selectedIds.has(id))
+
   const attempt = attemptCount + 1
+
   await prisma.answer.create({
-    data: { sessionId, questionId, choiceId, isCorrect, timeTaken: timeTaken ?? null, attempt },
+    data: {
+      sessionId, questionId,
+      choiceId: Array.from(selectedIds)[0] ?? null,
+      isCorrect, timeTaken: timeTaken ?? null, attempt,
+    },
   })
 
-  return NextResponse.json({ isCorrect, attempt, maxAttempts: quiz.maxAttempts })
+  return NextResponse.json({ isCorrect, attempt, maxAttempts: quiz.maxAttempts, correctCount: correctIds.size })
 }
