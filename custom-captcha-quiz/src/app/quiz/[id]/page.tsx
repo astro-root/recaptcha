@@ -9,7 +9,6 @@ interface Question { id: string; text: string; choices: Choice[] }
 interface SessionData { sessionId: string; token: string; signature: string; quizTitle: string; maxAttempts: number; questions: Question[] }
 interface AnswerResult { isCorrect: boolean; attempt: number; maxAttempts: number; limitReached?: boolean }
 interface FinalResult { questionId: string; questionText: string; isCorrect: boolean; timeTaken: number | null; attempt: number }
-
 type Phase = 'verifying' | 'loading' | 'error' | 'quiz' | 'done'
 
 function QuizInner() {
@@ -17,7 +16,6 @@ function QuizInner() {
   const searchParams = useSearchParams()
   const quizId = params.id as string
   const sig = searchParams.get('sig')
-
   const [phase, setPhase] = useState<Phase>(sig ? 'verifying' : 'loading')
   const [session, setSession] = useState<SessionData | null>(null)
   const [currentIdx, setCurrentIdx] = useState(0)
@@ -29,6 +27,7 @@ function QuizInner() {
   const [finalCorrect, setFinalCorrect] = useState(0)
   const [finalTotal, setFinalTotal] = useState(0)
   const [finalTime, setFinalTime] = useState(0)
+  const [passed, setPassed] = useState(false)
   const startTimeRef = useRef<number>(Date.now())
   const questionStartRef = useRef<number>(Date.now())
 
@@ -37,12 +36,11 @@ function QuizInner() {
       if (sig) {
         const res = await fetch(`/api/quiz/verify?quizId=${quizId}&sig=${sig}`)
         const data = await res.json()
-        if (!data.valid) { setErrorMsg('URLの署名が無効、または改ざんされています。'); setPhase('error'); return }
+        if (!data.valid) { setErrorMsg('URLの署名が無効です。'); setPhase('error'); return }
       }
       setPhase('loading')
       const res = await fetch('/api/quiz/session', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ quizId }),
       })
       if (!res.ok) { const d = await res.json(); setErrorMsg(d.error ?? 'クイズを開始できませんでした'); setPhase('error'); return }
@@ -61,8 +59,7 @@ function QuizInner() {
     if (!session || !selectedChoice || !currentQuestion) return
     const timeTaken = Math.round((Date.now() - questionStartRef.current) / 1000)
     const res = await fetch(`/api/quiz/session/${session.sessionId}/answer`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ token: session.token, signature: session.signature, questionId: currentQuestion.id, choiceId: selectedChoice, timeTaken }),
     })
     const result: AnswerResult = await res.json()
@@ -79,8 +76,7 @@ function QuizInner() {
       if (!session) return
       const totalTime = Math.round((Date.now() - startTimeRef.current) / 1000)
       const res = await fetch(`/api/quiz/session/${session.sessionId}/complete`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token: session.token, signature: session.signature, totalTime }),
       })
       const data = await res.json()
@@ -88,67 +84,70 @@ function QuizInner() {
       setFinalCorrect(data.correct ?? 0)
       setFinalTotal(data.total ?? 0)
       setFinalTime(data.totalTime ?? totalTime)
+      setPassed(data.passed ?? false)
       setPhase('done')
     }
   }
 
   if (phase === 'verifying' || phase === 'loading') return (
-    <div className="flex-center" style={{ minHeight: '100vh', flexDirection: 'column', gap: 16, background: 'var(--bg)' }}>
-      <SpinnerIcon size={30} color="var(--accent)" />
-      <p className="text-muted">{phase === 'verifying' ? 'URLを検証しています...' : 'セッションを開始しています...'}</p>
+    <div style={{ minHeight:'100vh', background:'var(--bg)', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:14 }}>
+      <SpinnerIcon size={28} color="#4a90d9" />
+      <p style={{ color:'var(--text2)', fontSize:13 }}>{phase === 'verifying' ? 'URLを検証中...' : 'セッションを開始中...'}</p>
     </div>
   )
 
   if (phase === 'error') return (
-    <div className="flex-center" style={{ minHeight: '100vh', background: 'var(--bg)' }}>
-      <div className="card" style={{ maxWidth: 380, textAlign: 'center' }}>
-        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 12, color: 'var(--danger)' }}>
-          <AlertIcon size={30} />
-        </div>
-        <p className="text-danger" style={{ fontWeight: 600, marginBottom: 8 }}>クイズを開始できません</p>
-        <p className="text-muted text-sm">{errorMsg}</p>
-        <Link href="/quiz" className="btn btn-secondary mt-4">クイズ一覧に戻る</Link>
+    <div style={{ minHeight:'100vh', background:'var(--bg)', display:'flex', alignItems:'center', justifyContent:'center', padding:16 }}>
+      <div style={{ background:'var(--surface)', border:'1px solid var(--border-dark)', borderRadius:3, padding:'28px 24px', width:'100%', maxWidth:360, textAlign:'center', boxShadow:'var(--shadow-lg)' }}>
+        <div style={{ color:'var(--danger)', marginBottom:12, display:'flex', justifyContent:'center' }}><AlertIcon size={28} /></div>
+        <p style={{ fontWeight:700, marginBottom:6, fontSize:15 }}>確認を開始できません</p>
+        <p style={{ color:'var(--text2)', fontSize:13, marginBottom:18 }}>{errorMsg}</p>
+        <Link href="/quiz" className="btn btn-secondary" style={{ borderRadius:3, fontSize:13 }}>クイズ一覧に戻る</Link>
       </div>
     </div>
   )
 
-  if (phase === 'done') {
-    const passed = finalCorrect === finalTotal
-    return (
-      <div className="flex-center" style={{ minHeight: '100vh', flexDirection: 'column', padding: 20, background: 'var(--bg)' }}>
-        <div className="card" style={{ maxWidth: 460, width: '100%' }}>
-          <div style={{ textAlign: 'center', marginBottom: 22 }}>
-            <div style={{
-              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-              width: 48, height: 48, borderRadius: '50%', marginBottom: 12,
-              background: passed ? 'var(--success-dim)' : 'var(--danger-dim)',
-              color: passed ? 'var(--success)' : 'var(--danger)',
-            }}>
-              {passed ? <CheckIcon size={24} /> : <XIcon size={24} />}
-            </div>
-            <h2 style={{ fontSize: 18, fontWeight: 700, marginBottom: 4 }}>{passed ? '確認が完了しました' : '確認に失敗しました'}</h2>
-            <p className="text-muted text-sm">{finalCorrect} / {finalTotal} 問正解 ・ 合計 {finalTime} 秒</p>
+  if (phase === 'done') return (
+    <div style={{ minHeight:'100vh', background:'var(--bg)', display:'flex', alignItems:'center', justifyContent:'center', padding:16 }}>
+      <div style={{ background:'var(--surface)', border:'1px solid var(--border-dark)', borderRadius:3, width:'100%', maxWidth:400, boxShadow:'var(--shadow-lg)', overflow:'hidden' }}>
+        <div style={{ background: passed ? 'var(--success)' : 'var(--danger)', padding:'20px 22px', color:'#fff', display:'flex', alignItems:'center', gap:12 }}>
+          <div style={{ width:40, height:40, borderRadius:'50%', background:'rgba(255,255,255,0.25)', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+            {passed ? <CheckIcon size={22} color="#fff" /> : <XIcon size={22} color="#fff" />}
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 20 }}>
+          <div>
+            <div style={{ fontWeight:700, fontSize:'clamp(14px,4vw,16px)' }}>{passed ? '本人確認が完了しました' : '本人確認に失敗しました'}</div>
+            <div style={{ fontSize:'clamp(11px,3vw,12px)', opacity:0.85, marginTop:2 }}>
+              {passed ? `全${finalTotal}問正解 · ${finalTime}秒` : `${finalTotal}問中${finalCorrect}問正解 · 全問正解が必要です`}
+            </div>
+          </div>
+        </div>
+        <div style={{ padding:'16px 18px' }}>
+          <div style={{ display:'flex', flexDirection:'column', gap:6, marginBottom:16 }}>
             {finalResults.map((r) => (
-              <div key={r.questionId} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', background: 'var(--surface2)', borderRadius: 'var(--radius)', borderLeft: `3px solid ${r.isCorrect ? 'var(--success)' : 'var(--danger)'}` }}>
+              <div key={r.questionId} style={{ display:'flex', alignItems:'center', gap:10, padding:'8px 12px', background: r.isCorrect ? 'var(--success-dim)' : 'var(--danger-dim)', borderRadius:3, borderLeft:`3px solid ${r.isCorrect ? 'var(--success)' : 'var(--danger)'}` }}>
                 {r.isCorrect ? <CheckIcon size={14} color="var(--success)" /> : <XIcon size={14} color="var(--danger)" />}
-                <span style={{ flex: 1, fontSize: 12.5 }}>{r.questionText}</span>
-                <span className="text-muted text-sm" style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-                  <ClockIcon size={12} />
-                  {r.timeTaken ?? '?'}秒
+                <span style={{ flex:1, fontSize:'clamp(11px,3vw,12.5px)', color:'var(--text)' }}>{r.questionText}</span>
+                <span style={{ display:'flex', alignItems:'center', gap:3, fontSize:11.5, color:'var(--text2)', whiteSpace:'nowrap' }}>
+                  <ClockIcon size={11} />{r.timeTaken ?? '?'}秒
                 </span>
               </div>
             ))}
           </div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <Link href={`/quiz/${quizId}`} className="btn btn-primary" style={{ flex: 1, justifyContent: 'center' }}>もう一度挑戦</Link>
-            <Link href="/quiz" className="btn btn-secondary">クイズ一覧へ</Link>
+          <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+            <Link href={`/quiz/${quizId}`} className="btn btn-primary" style={{ flex:1, borderRadius:3, fontSize:13, minWidth:120 }}>もう一度挑戦</Link>
+            <Link href="/quiz" className="btn btn-secondary" style={{ borderRadius:3, fontSize:13 }}>一覧へ</Link>
           </div>
         </div>
+        <div style={{ borderTop:'1px solid var(--border)', padding:'8px 14px', background:'#f9f9f9', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+          <div style={{ display:'flex', alignItems:'center', gap:5 }}>
+            <ShieldIcon size={16} color="#4a90d9" />
+            <span style={{ fontSize:9, color:'#9aa0a6', fontWeight:600 }}>QuizShield</span>
+          </div>
+          <span style={{ fontSize:9, color:'#9aa0a6' }}>プライバシー · 利用規約</span>
+        </div>
       </div>
-    )
-  }
+    </div>
+  )
 
   if (!session || !currentQuestion) return null
 
@@ -156,121 +155,80 @@ function QuizInner() {
   const isLimitReached = answerResult !== null && !answerResult.isCorrect && (answerResult.limitReached || answerResult.attempt >= answerResult.maxAttempts)
   const canProceed = isAnsweredCorrect || isLimitReached
   const hasImages = currentQuestion.choices.some(c => c.imageUrl)
+  const progress = (currentIdx / session.questions.length) * 100
 
   return (
-    <div className="flex-center" style={{ minHeight: '100vh', flexDirection: 'column', padding: 20, background: 'var(--bg)' }}>
-      <div style={{
-        width: '100%', maxWidth: hasImages ? 360 : 420,
-        background: 'var(--surface)', borderRadius: 3,
-        border: '1px solid var(--border-dark)', boxShadow: 'var(--shadow-lg)', overflow: 'hidden',
-      }}>
-        <div style={{ background: 'var(--accent)', padding: '14px 18px', color: '#fff' }}>
-          <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 2 }}>{currentQuestion.text}</div>
-          <div style={{ fontSize: 11, opacity: 0.85 }}>{session.quizTitle}（{currentIdx + 1} / {session.questions.length} 問）</div>
-        </div>
+    <div style={{ minHeight:'100vh', background:'var(--bg)', display:'flex', alignItems:'center', justifyContent:'center', padding:16 }}>
+      <div style={{ width:'100%', maxWidth: hasImages ? 420 : 380 }}>
+        <div style={{ background:'var(--surface)', border:'1px solid var(--border-dark)', borderRadius:3, boxShadow:'var(--shadow-lg)', overflow:'hidden' }}>
+          <div style={{ background:'#4a90d9', padding:'14px 18px' }}>
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:10 }}>
+              <div style={{ display:'flex', alignItems:'center', gap:7 }}>
+                <ShieldIcon size={15} color="rgba(255,255,255,0.85)" />
+                <span style={{ fontSize:'clamp(10px,3vw,11px)', color:'rgba(255,255,255,0.85)', fontWeight:600 }}>{session.quizTitle}</span>
+              </div>
+              <span style={{ fontSize:'clamp(10px,3vw,11px)', color:'rgba(255,255,255,0.75)', whiteSpace:'nowrap' }}>{currentIdx + 1} / {session.questions.length}</span>
+            </div>
+            <div style={{ background:'rgba(255,255,255,0.25)', borderRadius:2, height:3, overflow:'hidden', marginBottom:12 }}>
+              <div style={{ background:'#fff', height:'100%', width:`${progress}%`, transition:'width 0.3s ease' }} />
+            </div>
+            <div style={{ color:'#fff', fontSize:'clamp(13px,4vw,14.5px)', fontWeight:600, lineHeight:1.45 }}>{currentQuestion.text}</div>
+          </div>
 
-        <div style={{ padding: 4 }}>
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: hasImages ? 'repeat(2, 1fr)' : '1fr',
-            gap: hasImages ? 4 : 0,
-          }}>
-            {currentQuestion.choices.map((c) => {
-              const isSelected = selectedChoice === c.id
-              const showResult = !!answerResult && isSelected
-
-              if (hasImages) {
-                return (
-                  <button
-                    key={c.id}
-                    onClick={() => { if (!isAnsweredCorrect) setSelectedChoice(c.id) }}
-                    disabled={isAnsweredCorrect}
-                    className="tile-flip"
-                    style={{
-                      position: 'relative', aspectRatio: '1', overflow: 'hidden',
-                      border: 'none', cursor: isAnsweredCorrect ? 'not-allowed' : 'pointer',
-                      background: '#eee',
-                    }}
-                  >
-                    <img src={c.imageUrl ?? ''} alt={c.text} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
-                    {isSelected && (
-                      <div style={{
-                        position: 'absolute', inset: 0,
-                        background: showResult ? (answerResult!.isCorrect ? 'rgba(30,142,62,0.55)' : 'rgba(217,48,37,0.55)') : 'rgba(74,144,217,0.45)',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      }}>
-                        <div style={{ width: 32, height: 32, borderRadius: '50%', background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                          {showResult
-                            ? (answerResult!.isCorrect ? <CheckIcon size={18} color="var(--success)" /> : <XIcon size={18} color="var(--danger)" />)
-                            : <CheckIcon size={18} color="var(--accent)" />}
+          <div style={{ padding: hasImages ? 4 : 8 }}>
+            <div style={{ display:'grid', gridTemplateColumns: hasImages ? 'repeat(2,1fr)' : '1fr', gap: hasImages ? 3 : 0 }}>
+              {currentQuestion.choices.map((c) => {
+                const isSelected = selectedChoice === c.id
+                const showResult = !!answerResult && isSelected
+                if (hasImages) {
+                  return (
+                    <button key={c.id} onClick={() => { if (!isAnsweredCorrect) setSelectedChoice(c.id) }} disabled={isAnsweredCorrect}
+                      style={{ position:'relative', aspectRatio:'1', overflow:'hidden', border:'none', cursor: isAnsweredCorrect ? 'not-allowed' : 'pointer', background:'#eee', display:'block', width:'100%' }}>
+                      <img src={c.imageUrl ?? ''} alt={c.text} style={{ width:'100%', height:'100%', objectFit:'cover', display:'block' }} />
+                      {isSelected && (
+                        <div style={{ position:'absolute', inset:0, background: showResult ? (answerResult!.isCorrect ? 'rgba(30,142,62,0.6)' : 'rgba(217,48,37,0.6)') : 'rgba(74,144,217,0.5)', display:'flex', alignItems:'center', justifyContent:'center' }}>
+                          <div style={{ width:34, height:34, borderRadius:'50%', background:'#fff', display:'flex', alignItems:'center', justifyContent:'center' }}>
+                            {showResult ? (answerResult!.isCorrect ? <CheckIcon size={19} color="var(--success)" /> : <XIcon size={19} color="var(--danger)" />) : <CheckIcon size={19} color="#4a90d9" />}
+                          </div>
                         </div>
-                      </div>
-                    )}
-                    <div style={{
-                      position: 'absolute', bottom: 0, left: 0, right: 0,
-                      background: 'rgba(0,0,0,0.55)', color: '#fff', fontSize: 11,
-                      padding: '4px 6px', textAlign: 'center',
-                    }}>
-                      {c.text}
+                      )}
+                      <div style={{ position:'absolute', bottom:0, left:0, right:0, background:'rgba(0,0,0,0.52)', color:'#fff', fontSize:'clamp(10px,2.5vw,11px)', padding:'4px 6px', textAlign:'center' }}>{c.text}</div>
+                    </button>
+                  )
+                }
+                let borderColor='#e0e0e0', bg='#fff'
+                if (showResult) { borderColor = answerResult!.isCorrect ? 'var(--success)' : 'var(--danger)'; bg = answerResult!.isCorrect ? 'var(--success-dim)' : 'var(--danger-dim)' }
+                else if (isSelected) { borderColor='#4a90d9'; bg='#e8f0fb' }
+                return (
+                  <button key={c.id} onClick={() => { if (!isAnsweredCorrect) setSelectedChoice(c.id) }} disabled={isAnsweredCorrect}
+                    style={{ display:'flex', alignItems:'center', gap:12, border:`1px solid ${borderColor}`, background:bg, borderRadius:3, padding:'11px 14px', margin:'3px 4px', textAlign:'left', color:'var(--text)', cursor: isAnsweredCorrect ? 'not-allowed' : 'pointer', transition:'all 0.12s', width:'calc(100% - 8px)' }}>
+                    <div style={{ width:20, height:20, borderRadius:3, flexShrink:0, border:`2px solid ${isSelected ? (showResult ? borderColor : '#4a90d9') : '#c1c1c1'}`, background: isSelected ? (showResult ? borderColor : '#4a90d9') : '#fff', display:'flex', alignItems:'center', justifyContent:'center', boxShadow:'inset 0 1px 2px rgba(0,0,0,0.08)' }}>
+                      {isSelected && (showResult ? (answerResult!.isCorrect ? <CheckIcon size={12} color="#fff" /> : <XIcon size={12} color="#fff" />) : <CheckIcon size={12} color="#fff" />)}
                     </div>
+                    <span style={{ fontSize:'clamp(12px,3.5vw,13.5px)', lineHeight:1.4 }}>{c.text}</span>
                   </button>
                 )
-              }
-
-              let borderColor = 'var(--border)', bg = 'var(--surface)'
-              if (showResult) {
-                borderColor = answerResult!.isCorrect ? 'var(--success)' : 'var(--danger)'
-                bg = answerResult!.isCorrect ? 'var(--success-dim)' : 'var(--danger-dim)'
-              } else if (isSelected) {
-                borderColor = 'var(--accent)'; bg = 'var(--accent-dim)'
-              }
-              return (
-                <button key={c.id} onClick={() => { if (!isAnsweredCorrect) setSelectedChoice(c.id) }} disabled={isAnsweredCorrect}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: 10,
-                    border: `1px solid ${borderColor}`, background: bg, borderRadius: 'var(--radius)',
-                    padding: '12px 14px', margin: 4, textAlign: 'left', color: 'var(--text)',
-                    cursor: isAnsweredCorrect ? 'not-allowed' : 'pointer',
-                  }}>
-                  <div style={{
-                    width: 20, height: 20, borderRadius: 3, flexShrink: 0,
-                    border: `2px solid ${isSelected ? (showResult ? borderColor : 'var(--accent)') : 'var(--border-dark)'}`,
-                    background: isSelected ? (showResult ? borderColor : 'var(--accent)') : '#fff',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  }}>
-                    {isSelected && (showResult
-                      ? (answerResult!.isCorrect ? <CheckIcon size={12} color="#fff" /> : <XIcon size={12} color="#fff" />)
-                      : <CheckIcon size={12} color="#fff" />)}
-                  </div>
-                  <span style={{ fontSize: 13.5 }}>{c.text}</span>
-                </button>
-              )
-            })}
+              })}
+            </div>
           </div>
-        </div>
 
-        {answerResult && (
-          <div style={{
-            margin: '0 8px 8px', display: 'flex', alignItems: 'center', gap: 6,
-            padding: '8px 12px', borderRadius: 'var(--radius)',
-            background: answerResult.isCorrect ? 'var(--success-dim)' : 'var(--danger-dim)',
-            color: answerResult.isCorrect ? 'var(--success)' : 'var(--danger)', fontWeight: 600, fontSize: 12.5,
-          }}>
-            {answerResult.isCorrect ? <CheckIcon size={14} /> : <XIcon size={14} />}
-            {answerResult.isCorrect ? '正解です' : isLimitReached ? `不正解です（試行上限：${answerResult.attempt}/${answerResult.maxAttempts}）` : `不正解です。もう一度お試しください（${answerResult.attempt}/${answerResult.maxAttempts}）`}
-          </div>
-        )}
+          {answerResult && (
+            <div style={{ margin:'0 8px 6px', display:'flex', alignItems:'center', gap:7, padding:'8px 12px', borderRadius:3, background: answerResult.isCorrect ? 'var(--success-dim)' : 'var(--danger-dim)', color: answerResult.isCorrect ? 'var(--success)' : 'var(--danger)', fontWeight:600, fontSize:'clamp(11px,3vw,12.5px)' }}>
+              {answerResult.isCorrect ? <CheckIcon size={14} /> : <XIcon size={14} />}
+              {answerResult.isCorrect ? '正解です' : isLimitReached ? `不正解です（試行上限 ${answerResult.attempt}/${answerResult.maxAttempts}）` : `不正解です。もう一度選んでください（${answerResult.attempt}/${answerResult.maxAttempts}）`}
+            </div>
+          )}
 
-        <div style={{
-          borderTop: '1px solid var(--border)', padding: '10px 14px', background: 'var(--surface2)',
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10,
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 5, color: 'var(--text3)' }}>
-            <ShieldIcon size={18} />
-            <span style={{ fontSize: 9, fontWeight: 600 }}>QuizShield</span>
+          <div style={{ borderTop:'1px solid var(--border)', padding:'10px 14px', background:'#f9f9f9', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+            <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:1 }}>
+              <ShieldIcon size={22} color="#4a90d9" />
+              <span style={{ fontSize:8, color:'#9aa0a6', fontWeight:600 }}>QuizShield</span>
+            </div>
+            <div>
+              {!canProceed && <button className="btn btn-primary btn-sm" onClick={submitAnswer} disabled={!selectedChoice} style={{ borderRadius:3, fontSize:'clamp(12px,3vw,13px)', padding:'8px 20px' }}>確認</button>}
+              {canProceed && <button className="btn btn-primary btn-sm" onClick={nextQuestion} style={{ borderRadius:3, fontSize:'clamp(12px,3vw,13px)', padding:'8px 20px' }}>{currentIdx + 1 < session.questions.length ? '次へ' : '結果を見る'}</button>}
+            </div>
           </div>
-          {!canProceed && <button className="btn btn-primary btn-sm" onClick={submitAnswer} disabled={!selectedChoice}>確認</button>}
-          {canProceed && <button className="btn btn-primary btn-sm" onClick={nextQuestion}>{currentIdx + 1 < session.questions.length ? '次へ' : '結果を見る'}</button>}
         </div>
       </div>
     </div>
@@ -279,7 +237,7 @@ function QuizInner() {
 
 export default function QuizPage() {
   return (
-    <Suspense fallback={<div className="flex-center" style={{ minHeight: '100vh', background: 'var(--bg)' }}><p className="text-muted">読み込み中...</p></div>}>
+    <Suspense fallback={<div style={{ minHeight:'100vh', background:'var(--bg)', display:'flex', alignItems:'center', justifyContent:'center' }}><SpinnerIcon size={28} color="#4a90d9" /></div>}>
       <QuizInner />
     </Suspense>
   )
