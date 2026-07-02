@@ -1,16 +1,35 @@
 'use client'
-import { useState, useEffect, useRef, Suspense } from 'react'
+import { useState, useRef, Suspense } from 'react'
 import { useParams, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { ShieldIcon, CheckIcon, XIcon, AlertIcon, SpinnerIcon, ClockIcon } from '@/components/icons'
 
 interface Choice { id: string; text: string; imageUrl: string | null }
-interface Question { id: string; text: string; multiSelect: boolean; correctCount: number; choices: Choice[] }
+interface Question { id: string; text: string; multiSelect: boolean; choices: Choice[] }
 interface SessionData { sessionId: string; token: string; signature: string; quizTitle: string; maxAttempts: number; questions: Question[] }
-interface AnswerResult { isCorrect: boolean; attempt: number; maxAttempts: number; limitReached?: boolean; correctCount?: number }
+interface AnswerResult { isCorrect: boolean; attempt: number; maxAttempts: number; limitReached?: boolean }
 interface FinalResult { questionId: string; questionText: string; isCorrect: boolean; timeTaken: number | null; attempt: number }
-
 type Phase = 'check' | 'verifying' | 'loading' | 'error' | 'quiz' | 'done'
+
+const widgetStyle: React.CSSProperties = {
+  background: '#fff', border: '1px solid #c1c1c1', borderRadius: 3,
+  boxShadow: '0 2px 8px rgba(0,0,0,0.1)', overflow: 'hidden', width: '100%',
+}
+const footerBar = (extra?: React.ReactNode) => (
+  <div style={{ borderTop: '1px solid #e0e0e0', padding: '8px 14px', background: '#f9f9f9', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 }}>
+      <ShieldIcon size={22} color="#4a90d9" />
+      <span style={{ fontSize: 8, color: '#9aa0a6', fontWeight: 600 }}>QuizShield</span>
+    </div>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+      {extra}
+      <div style={{ textAlign: 'right' }}>
+        <div style={{ fontSize: 9, color: '#9aa0a6' }}>プライバシー</div>
+        <div style={{ fontSize: 9, color: '#9aa0a6' }}>利用規約</div>
+      </div>
+    </div>
+  </div>
+)
 
 function QuizInner() {
   const params = useParams()
@@ -38,10 +57,7 @@ function QuizInner() {
   function handleCheck() {
     if (checkDone || checkLoading) return
     setCheckLoading(true)
-    setTimeout(() => {
-      setCheckLoading(false)
-      setCheckDone(true)
-    }, 900)
+    setTimeout(() => { setCheckLoading(false); setCheckDone(true) }, 900)
   }
 
   async function startQuiz() {
@@ -70,13 +86,8 @@ function QuizInner() {
     if (!currentQuestion) return
     setSelectedChoices(prev => {
       const next = new Set(prev)
-      if (currentQuestion.multiSelect) {
-        if (next.has(choiceId)) next.delete(choiceId)
-        else next.add(choiceId)
-      } else {
-        next.clear()
-        next.add(choiceId)
-      }
+      if (next.has(choiceId)) next.delete(choiceId)
+      else next.add(choiceId)
       return next
     })
   }
@@ -86,12 +97,7 @@ function QuizInner() {
     const timeTaken = Math.round((Date.now() - questionStartRef.current) / 1000)
     const res = await fetch(`/api/quiz/session/${session.sessionId}/answer`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        token: session.token, signature: session.signature,
-        questionId: currentQuestion.id,
-        choiceIds: Array.from(selectedChoices),
-        timeTaken,
-      }),
+      body: JSON.stringify({ token: session.token, signature: session.signature, questionId: currentQuestion.id, choiceIds: Array.from(selectedChoices), timeTaken }),
     })
     const result: AnswerResult = await res.json()
     setAnswerResult(result)
@@ -120,29 +126,12 @@ function QuizInner() {
     }
   }
 
-  const widgetStyle: React.CSSProperties = {
-    background: '#fff', border: '1px solid #c1c1c1', borderRadius: 3,
-    boxShadow: '0 2px 8px rgba(0,0,0,0.1)', overflow: 'hidden', width: '100%',
-  }
-
-  const footerStyle: React.CSSProperties = {
-    borderTop: '1px solid #e0e0e0', padding: '8px 14px', background: '#f9f9f9',
-    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-  }
-
-  const logoArea = (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 }}>
-      <ShieldIcon size={22} color="#4a90d9" />
-      <span style={{ fontSize: 8, color: '#9aa0a6', fontWeight: 600 }}>QuizShield</span>
-    </div>
-  )
-
   if (phase === 'check') return (
     <div style={{ minHeight: '100vh', background: '#f5f5f5', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
       <div style={{ width: '100%', maxWidth: 340, display: 'flex', flexDirection: 'column', gap: 16 }}>
         <div style={{ textAlign: 'center' }}>
           <h1 style={{ fontSize: 'clamp(15px,4vw,17px)', fontWeight: 700, marginBottom: 6 }}>本人確認が必要です</h1>
-          <p style={{ color: '#5f6368', fontSize: 'clamp(12px,3vw,13px)' }}>このサービスを利用するには、自動プログラムでないことを確認してください。</p>
+          <p style={{ color: '#5f6368', fontSize: 'clamp(12px,3vw,13px)', lineHeight: 1.6 }}>このサービスを利用するには、自動プログラムでないことを確認してください。</p>
         </div>
         <div style={widgetStyle}>
           <div style={{ padding: '18px 20px', display: 'flex', alignItems: 'center', gap: 16 }}>
@@ -153,13 +142,7 @@ function QuizInner() {
             </button>
             <span style={{ fontSize: 15, userSelect: 'none' }}>私は人間です</span>
           </div>
-          <div style={footerStyle}>
-            {logoArea}
-            <div style={{ textAlign: 'right' }}>
-              <div style={{ fontSize: 9, color: '#9aa0a6' }}>プライバシー</div>
-              <div style={{ fontSize: 9, color: '#9aa0a6' }}>利用規約</div>
-            </div>
-          </div>
+          {footerBar()}
         </div>
         {checkDone && (
           <button onClick={startQuiz} className="btn btn-primary fade-up" style={{ width: '100%', borderRadius: 3, fontSize: 14 }}>
@@ -196,9 +179,11 @@ function QuizInner() {
             {passed ? <CheckIcon size={22} color="#fff" /> : <XIcon size={22} color="#fff" />}
           </div>
           <div>
-            <div style={{ fontWeight: 700, fontSize: 'clamp(14px,4vw,16px)' }}>{passed ? '本人確認が完了しました' : '本人確認に失敗しました'}</div>
+            <div style={{ fontWeight: 700, fontSize: 'clamp(14px,4vw,16px)' }}>
+              {passed ? '本人確認が成功しました' : '本人確認に失敗しました'}
+            </div>
             <div style={{ fontSize: 'clamp(11px,3vw,12px)', opacity: 0.85, marginTop: 2 }}>
-              {passed ? `全${finalTotal}問正解 · ${finalTime}秒` : `${finalTotal}問中${finalCorrect}問正解 · 全問正解が必要です`}
+              {passed ? `所要時間 ${finalTime}秒` : `もう一度お試しください`}
             </div>
           </div>
         </div>
@@ -219,10 +204,7 @@ function QuizInner() {
             <Link href="/quiz" className="btn btn-secondary" style={{ borderRadius: 3, fontSize: 13 }}>一覧へ</Link>
           </div>
         </div>
-        <div style={footerStyle}>
-          {logoArea}
-          <span style={{ fontSize: 9, color: '#9aa0a6' }}>プライバシー · 利用規約</span>
-        </div>
+        {footerBar()}
       </div>
     </div>
   )
@@ -250,12 +232,12 @@ function QuizInner() {
             <div style={{ background: 'rgba(255,255,255,0.25)', borderRadius: 2, height: 3, overflow: 'hidden', marginBottom: 12 }}>
               <div style={{ background: '#fff', height: '100%', width: `${progress}%`, transition: 'width 0.3s ease' }} />
             </div>
-            <div style={{ color: '#fff', fontSize: 'clamp(13px,4vw,14.5px)', fontWeight: 600, lineHeight: 1.45, marginBottom: currentQuestion.multiSelect ? 6 : 0 }}>
+            <div style={{ color: '#fff', fontSize: 'clamp(13px,4vw,14.5px)', fontWeight: 600, lineHeight: 1.45 }}>
               {currentQuestion.text}
             </div>
             {currentQuestion.multiSelect && (
-              <div style={{ marginTop: 6, fontSize: 11, color: 'rgba(255,255,255,0.85)', background: 'rgba(255,255,255,0.15)', borderRadius: 3, padding: '3px 8px', display: 'inline-block' }}>
-                該当するものをすべて選択してください（{currentQuestion.correctCount}つ）
+              <div style={{ marginTop: 8, fontSize: 11, color: 'rgba(255,255,255,0.85)', background: 'rgba(255,255,255,0.15)', borderRadius: 3, padding: '3px 8px', display: 'inline-block' }}>
+                該当するものをすべて選択してください
               </div>
             )}
           </div>
@@ -268,9 +250,9 @@ function QuizInner() {
 
                 if (hasImages) {
                   return (
-                    <button key={c.id} onClick={() => { if (!isAnsweredCorrect && !answerResult?.isCorrect) toggleChoice(c.id) }}
-                      disabled={isAnsweredCorrect}
-                      style={{ position: 'relative', aspectRatio: '1', overflow: 'hidden', border: isSelected ? '3px solid #4a90d9' : 'none', cursor: isAnsweredCorrect ? 'not-allowed' : 'pointer', background: '#eee', display: 'block', width: '100%' }}>
+                    <button key={c.id}
+                      onClick={() => { if (!canProceed) toggleChoice(c.id) }}
+                      style={{ position: 'relative', aspectRatio: '1', overflow: 'hidden', border: isSelected ? '3px solid #4a90d9' : '3px solid transparent', cursor: canProceed ? 'not-allowed' : 'pointer', background: '#eee', display: 'block', width: '100%' }}>
                       <img src={c.imageUrl ?? ''} alt={c.text} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
                       {isSelected && (
                         <div style={{ position: 'absolute', top: 6, right: 6, width: 26, height: 26, borderRadius: '50%', background: showResult ? (answerResult!.isCorrect ? '#1e8e3e' : '#d93025') : '#4a90d9', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 1px 4px rgba(0,0,0,0.3)' }}>
@@ -291,10 +273,10 @@ function QuizInner() {
                 }
 
                 return (
-                  <button key={c.id} onClick={() => { if (!isAnsweredCorrect && !answerResult?.isCorrect) toggleChoice(c.id) }}
-                    disabled={isAnsweredCorrect}
-                    style={{ display: 'flex', alignItems: 'center', gap: 12, border: `1px solid ${borderColor}`, background: bg, borderRadius: 3, padding: '11px 14px', margin: '3px 4px', textAlign: 'left', color: '#1f1f1f', cursor: isAnsweredCorrect ? 'not-allowed' : 'pointer', transition: 'all 0.12s', width: 'calc(100% - 8px)' }}>
-                    <div style={{ width: 20, height: 20, borderRadius: currentQuestion.multiSelect ? 3 : '50%', flexShrink: 0, border: `2px solid ${isSelected ? (showResult ? borderColor : '#4a90d9') : '#c1c1c1'}`, background: isSelected ? (showResult ? borderColor : '#4a90d9') : '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.08)' }}>
+                  <button key={c.id}
+                    onClick={() => { if (!canProceed) toggleChoice(c.id) }}
+                    style={{ display: 'flex', alignItems: 'center', gap: 12, border: `1px solid ${borderColor}`, background: bg, borderRadius: 3, padding: '11px 14px', margin: '3px 4px', textAlign: 'left', color: '#1f1f1f', cursor: canProceed ? 'not-allowed' : 'pointer', transition: 'all 0.12s', width: 'calc(100% - 8px)' }}>
+                    <div style={{ width: 20, height: 20, borderRadius: currentQuestion.multiSelect ? 3 : '50%', flexShrink: 0, border: `2px solid ${isSelected ? (showResult ? borderColor : '#4a90d9') : '#c1c1c1'}`, background: isSelected ? (showResult ? borderColor : '#4a90d9') : '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.08)', transition: 'all 0.12s' }}>
                       {isSelected && <CheckIcon size={12} color="#fff" />}
                     </div>
                     <span style={{ fontSize: 'clamp(12px,3.5vw,13.5px)', lineHeight: 1.4 }}>{c.text}</span>
@@ -307,27 +289,28 @@ function QuizInner() {
           {answerResult && (
             <div style={{ margin: '0 8px 6px', display: 'flex', alignItems: 'center', gap: 7, padding: '8px 12px', borderRadius: 3, background: answerResult.isCorrect ? 'rgba(30,142,62,0.08)' : 'rgba(217,48,37,0.08)', color: answerResult.isCorrect ? '#1e8e3e' : '#d93025', fontWeight: 600, fontSize: 'clamp(11px,3vw,12.5px)' }}>
               {answerResult.isCorrect ? <CheckIcon size={14} /> : <XIcon size={14} />}
-              {answerResult.isCorrect ? '正解です' : isLimitReached ? `不正解です（試行上限 ${answerResult.attempt}/${answerResult.maxAttempts}）` : `不正解です。もう一度選んでください（${answerResult.attempt}/${answerResult.maxAttempts}）`}
+              {answerResult.isCorrect
+                ? '正解です'
+                : isLimitReached
+                  ? `不正解です（試行回数の上限に達しました）`
+                  : `不正解です。もう一度選んでください（${answerResult.attempt}/${answerResult.maxAttempts}）`}
             </div>
           )}
 
-          <div style={footerStyle}>
-            {logoArea}
-            <div>
-              {!canProceed && (
-                <button className="btn btn-primary btn-sm" onClick={submitAnswer}
-                  disabled={selectedChoices.size === 0 || (currentQuestion.multiSelect && selectedChoices.size < currentQuestion.correctCount && !answerResult)}
-                  style={{ borderRadius: 3, fontSize: 'clamp(12px,3vw,13px)', padding: '8px 20px' }}>
-                  確認
-                </button>
-              )}
-              {canProceed && (
-                <button className="btn btn-primary btn-sm" onClick={nextQuestion} style={{ borderRadius: 3, fontSize: 'clamp(12px,3vw,13px)', padding: '8px 20px' }}>
-                  {currentIdx + 1 < session.questions.length ? '次へ' : '結果を見る'}
-                </button>
-              )}
-            </div>
-          </div>
+          {footerBar(
+            !canProceed ? (
+              <button className="btn btn-primary btn-sm" onClick={submitAnswer}
+                disabled={selectedChoices.size === 0}
+                style={{ borderRadius: 3, fontSize: 'clamp(12px,3vw,13px)', padding: '8px 20px' }}>
+                確認
+              </button>
+            ) : (
+              <button className="btn btn-primary btn-sm" onClick={nextQuestion}
+                style={{ borderRadius: 3, fontSize: 'clamp(12px,3vw,13px)', padding: '8px 20px' }}>
+                {currentIdx + 1 < session.questions.length ? '次へ' : '結果を見る'}
+              </button>
+            )
+          )}
         </div>
       </div>
     </div>

@@ -27,18 +27,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ ses
   const correctIds = new Set(allChoices.filter(c => c.isCorrect).map(c => c.id))
   const selectedIds = new Set<string>(Array.isArray(choiceIds) ? choiceIds : [choiceIds])
 
-  const isCorrect = correctIds.size === selectedIds.size &&
-    [...correctIds].every(id => selectedIds.has(id))
-
+  const isCorrect = correctIds.size === selectedIds.size && [...correctIds].every(id => selectedIds.has(id))
   const attempt = attemptCount + 1
 
   await prisma.answer.create({
-    data: {
-      sessionId, questionId,
-      choiceId: Array.from(selectedIds)[0] ?? null,
-      isCorrect, timeTaken: timeTaken ?? null, attempt,
-    },
+    data: { sessionId, questionId, choiceId: Array.from(selectedIds)[0] ?? null, isCorrect, timeTaken: timeTaken ?? null, attempt },
   })
 
-  return NextResponse.json({ isCorrect, attempt, maxAttempts: quiz.maxAttempts, correctCount: correctIds.size })
+  return NextResponse.json({ isCorrect, attempt, maxAttempts: quiz.maxAttempts })
 }
