@@ -30,5 +30,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ ses
   }))
 
   const correct = results.filter(r => r.isCorrect).length
-  return NextResponse.json({ results, correct, total: results.length, totalTime })
+  const total = results.length
+  const passed = correct === total && total > 0
+
+  return NextResponse.json({ results, correct, total, totalTime, passed })
 }
